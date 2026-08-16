@@ -1,0 +1,18 @@
+{
+  "name": "bluetooth-escpos-printer-test",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Simple Windows COM-port ESC/POS thermal printer test.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "test-printer": "node index.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "serialport": "^12.0.0"
+  }
+}
