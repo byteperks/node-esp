@@ -49,8 +49,8 @@ async function printTestReceipt() {
 
     const receipt = Buffer.concat([
       Buffer.from([0x1b, 0x40]), // ESC @: initialize printer
-      Buffer.from('I love you \n', 'ascii'),
-      Buffer.from([0x0a]) // Feed one line
+      Buffer.from('Chalgaya BSDK \n', 'ascii'),
+      Buffer.from([0x0a , 0x0a, 0x0a, 0x0a]) // Feed 4 lines
     ]);
 
     await new Promise((resolve, reject) => port.write(receipt, (error) => (error ? reject(error) : resolve())));
