@@ -1,7 +1,7 @@
 const { SerialPort } = require('serialport');
 
-const portPath = process.env.PRINTER_PORT || 'COM7';
-const baudRate = Number(process.env.PRINTER_BAUD_RATE || '9600');
+const defaultPortPath = process.env.PRINTER_PORT || 'COM7';
+const defaultBaudRate = Number(process.env.PRINTER_BAUD_RATE || '9600');
 const lineWidth = 32;
 let printQueue = Promise.resolve();
 
@@ -113,9 +113,12 @@ function closePort(port) {
   });
 }
 
-async function sendReceipt(mergedOrders, orderDetails) {
+async function sendReceipt(mergedOrders, orderDetails, connection = {}) {
+  const portPath = connection.portPath || defaultPortPath;
+  const baudRate = Number(connection.baudRate || defaultBaudRate);
+
   if (!Number.isInteger(baudRate) || baudRate <= 0) {
-    throw new Error('PRINTER_BAUD_RATE must be a positive whole number.');
+    throw new Error('Baud rate must be a positive whole number.');
   }
 
   const port = new SerialPort({ path: portPath, baudRate, autoOpen: false });
@@ -134,10 +137,10 @@ async function sendReceipt(mergedOrders, orderDetails) {
   }
 }
 
-function queueReceiptPrint(mergedOrders, orderDetails) {
-  const job = printQueue.then(() => sendReceipt(mergedOrders, orderDetails));
+function queueReceiptPrint(mergedOrders, orderDetails, connection) {
+  const job = printQueue.then(() => sendReceipt(mergedOrders, orderDetails, connection));
   printQueue = job.catch(() => undefined);
   return job;
 }
 
-module.exports = { queueReceiptPrint, portPath, baudRate };
+module.exports = { queueReceiptPrint, defaultPortPath, defaultBaudRate };

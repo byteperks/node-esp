@@ -1,5 +1,5 @@
 const express = require('express');
-const { queueReceiptPrint, portPath, baudRate } = require('./printer');
+const { queueReceiptPrint, defaultPortPath, defaultBaudRate } = require('./printer');
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -35,14 +35,19 @@ app.post('/print', async (request, response) => {
     return;
   }
 
+  const computer = payload.computer ?? orderDetails.computer;
+  const ms = payload.ms ?? orderDetails.ms;
+  const portPath = computer !== undefined ? `COM${computer}` : defaultPortPath;
+  const baudRate = ms !== undefined ? Number(ms) : defaultBaudRate;
+
   try {
-    await queueReceiptPrint(mergedOrders, orderDetails);
+    await queueReceiptPrint(mergedOrders, orderDetails, { portPath, baudRate });
     response.json({ ok: true, message: `Receipt sent to ${portPath} at ${baudRate} baud.` });
   } catch (error) {
     console.error(`Print failed for ${portPath} at ${baudRate} baud:`, error.message);
     response.status(502).json({
       ok: false,
-      error: `Could not print to ${portPath} at ${baudRate} baud.`,
+      error: `Computer ${portPath} is not responsive at ${baudRate}.`,
       details: error.message
     });
   }
@@ -50,5 +55,5 @@ app.post('/print', async (request, response) => {
 
 app.listen(port, () => {
   console.log(`Receipt API listening at http://localhost:${port}`);
-  console.log(`POST receipt data to /print to print on ${portPath} at ${baudRate} baud.`);
+  console.log(`POST receipt data to /print to print on ${defaultPortPath} at ${defaultBaudRate} baud (or per-request via computer/ms).`);
 });
