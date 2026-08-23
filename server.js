@@ -1,5 +1,5 @@
 const express = require('express');
-const { queueReceiptPrint, defaultPortPath, defaultBaudRate } = require('./printer');
+const { queueReceiptPrint, queueBillPrint, defaultPortPath, defaultBaudRate } = require('./printer');
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -53,7 +53,38 @@ app.post('/print', async (request, response) => {
   }
 });
 
+app.post('/print-bill', async (request, response) => {
+  const payload = request.body ?? {};
+  const orderDetails = payload.orderDetails ?? payload;
+  const mergedOrders = payload.mergedOrders ?? orderDetails.orders;
+
+  if (!Array.isArray(mergedOrders) || !orderDetails || typeof orderDetails !== 'object') {
+    response.status(400).json({
+      error: 'Send mergedOrders and orderDetails, or send orderDetails directly with its orders array.'
+    });
+    return;
+  }
+
+  const computer = payload.computer ?? orderDetails.computer;
+  const ms = payload.ms ?? orderDetails.ms;
+  const portPath = computer !== undefined ? `COM${computer}` : defaultPortPath;
+  const baudRate = ms !== undefined ? Number(ms) : defaultBaudRate;
+
+  try {
+    await queueBillPrint(mergedOrders, orderDetails, { portPath, baudRate });
+    response.json({ ok: true, message: `Bill sent to ${portPath} at ${baudRate} baud.` });
+  } catch (error) {
+    console.error(`Bill print failed for ${portPath} at ${baudRate} baud:`, error.message);
+    response.status(502).json({
+      ok: false,
+      error: `Computer ${portPath} is not responsive at ${baudRate}.`,
+      details: error.message
+    });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Receipt API listening at http://localhost:${port}`);
   console.log(`POST receipt data to /print to print on ${defaultPortPath} at ${defaultBaudRate} baud (or per-request via computer/ms).`);
+  console.log('POST the same payload to /print-bill for a footer-less final bill before payment.');
 });

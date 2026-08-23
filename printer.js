@@ -106,6 +106,38 @@ function buildReceipt(mergedOrders, orderDetails) {
   return lines.join('\n');
 }
 
+function buildBill(mergedOrders, orderDetails) {
+  const items = Array.isArray(mergedOrders) ? mergedOrders : [];
+  const total = Number(orderDetails.finalTotal) || 0;
+  const lines = [
+    center("TUISHI'S CAFE"),
+    center('Sunakothi, Lalitpur'),
+    center('+977 974-4375508'),
+    center('Pan No: 620538266'),
+    '-'.repeat(lineWidth),
+    `Bill no: ${orderDetails.order_id ?? ''}`,
+    `Date: ${orderDetails.nepaliDate ?? orderDetails.created_at ?? ''}`,
+    ...(orderDetails.customer_name ? [`Customer: ${orderDetails.customer_name}`] : []),
+    ...(orderDetails.customer_pan ? [`Customer PAN: ${orderDetails.customer_pan}`] : []),
+    '-'.repeat(lineWidth),
+    center('BILL'),
+  ];
+
+  for (const item of items) {
+    lines.push(...wrap(item.name));
+    lines.push(itemLine(Number(item.quantity) || 0, item.price, (Number(item.quantity) || 0) * (Number(item.price) || 0)));
+  }
+
+  lines.push('-'.repeat(lineWidth));
+  lines.push(totalLine('Sub Total', money(orderDetails.totalAmount)));
+  if (Number(orderDetails.discount?.percent) > 0) {
+    lines.push(totalLine(`Discount ${money(orderDetails.discount.percent)}%`, `-${money(orderDetails.discount.amount)}`));
+  }
+  lines.push(totalLine('Total', money(total)));
+
+  return lines.join('\n');
+}
+
 function closePort(port) {
   return new Promise((resolve, reject) => {
     if (!port.isOpen) return resolve();
@@ -113,7 +145,7 @@ function closePort(port) {
   });
 }
 
-async function sendReceipt(mergedOrders, orderDetails, connection = {}) {
+async function sendText(text, connection = {}) {
   const portPath = connection.portPath || defaultPortPath;
   const baudRate = Number(connection.baudRate || defaultBaudRate);
 
@@ -127,7 +159,7 @@ async function sendReceipt(mergedOrders, orderDetails, connection = {}) {
     await new Promise((resolve, reject) => port.open((error) => (error ? reject(error) : resolve())));
     const data = Buffer.concat([
       Buffer.from([0x1b, 0x40]), // ESC @: initialize
-      Buffer.from(buildReceipt(mergedOrders, orderDetails), 'ascii'),
+      Buffer.from(text, 'ascii'),
       Buffer.from('\n\n\n\n', 'ascii')
     ]);
     await new Promise((resolve, reject) => port.write(data, (error) => (error ? reject(error) : resolve())));
@@ -137,10 +169,24 @@ async function sendReceipt(mergedOrders, orderDetails, connection = {}) {
   }
 }
 
+function sendReceipt(mergedOrders, orderDetails, connection) {
+  return sendText(buildReceipt(mergedOrders, orderDetails), connection);
+}
+
+function sendBill(mergedOrders, orderDetails, connection) {
+  return sendText(buildBill(mergedOrders, orderDetails), connection);
+}
+
 function queueReceiptPrint(mergedOrders, orderDetails, connection) {
   const job = printQueue.then(() => sendReceipt(mergedOrders, orderDetails, connection));
   printQueue = job.catch(() => undefined);
   return job;
 }
 
-module.exports = { queueReceiptPrint, defaultPortPath, defaultBaudRate };
+function queueBillPrint(mergedOrders, orderDetails, connection) {
+  const job = printQueue.then(() => sendBill(mergedOrders, orderDetails, connection));
+  printQueue = job.catch(() => undefined);
+  return job;
+}
+
+module.exports = { queueReceiptPrint, queueBillPrint, defaultPortPath, defaultBaudRate };
