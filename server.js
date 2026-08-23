@@ -1,8 +1,15 @@
 const express = require('express');
 const { queueReceiptPrint, queueBillPrint, defaultPortPath, defaultBaudRate } = require('./printer');
+const { findMptII } = require('./ports');
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
+
+async function resolvePortPath(computer) {
+  if (computer !== undefined) return `COM${computer}`;
+  const detected = await findMptII({ silent: true }).catch(() => null);
+  return detected || defaultPortPath;
+}
 
 app.use((request, response, next) => {
   response.setHeader('Access-Control-Allow-Origin', '*');
@@ -37,7 +44,7 @@ app.post('/print', async (request, response) => {
 
   const computer = payload.computer ?? orderDetails.computer;
   const ms = payload.ms ?? orderDetails.ms;
-  const portPath = computer !== undefined ? `COM${computer}` : defaultPortPath;
+  const portPath = await resolvePortPath(computer);
   const baudRate = ms !== undefined ? Number(ms) : defaultBaudRate;
 
   try {
@@ -67,7 +74,7 @@ app.post('/print-bill', async (request, response) => {
 
   const computer = payload.computer ?? orderDetails.computer;
   const ms = payload.ms ?? orderDetails.ms;
-  const portPath = computer !== undefined ? `COM${computer}` : defaultPortPath;
+  const portPath = await resolvePortPath(computer);
   const baudRate = ms !== undefined ? Number(ms) : defaultBaudRate;
 
   try {
