@@ -138,6 +138,82 @@ function buildBill(mergedOrders, orderDetails) {
   return lines.join('\n');
 }
 
+// ---- Kitchen Order Ticket (KOT) ----------------------------------------------
+// ESC/POS control sequences (all bytes < 0x80, safe through Buffer.from(x,'ascii'))
+const ESC = '\x1b';
+const GS = '\x1d';
+const EMPH_ON = `${ESC}E\x01`;
+const EMPH_OFF = `${ESC}E\x00`;
+const DOUBLE_ON = `${GS}!\x11`;   // double width + double height
+const DOUBLE_OFF = `${GS}!\x00`;
+const ALIGN_CENTER = `${ESC}a\x01`;
+const ALIGN_LEFT = `${ESC}a\x00`;
+
+function ticketTime(value) {
+  const date = value ? new Date(String(value).replace(' ', 'T')) : new Date();
+  if (Number.isNaN(date.getTime())) return String(value ?? '');
+  return date.toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true
+  });
+}
+
+function tableLabel(kot) {
+  return textFromReactNode(kot.table_name) || (kot.table_id != null ? String(kot.table_id) : '-');
+}
+
+// Kitchen copy: big and bold, NO prices.
+function buildKot(kot = {}) {
+  const items = Array.isArray(kot.items) ? kot.items : [];
+  const lines = [
+    ALIGN_CENTER,
+    `${DOUBLE_ON}KOT #${kot.kot_number ?? '-'}${DOUBLE_OFF}`
+  ];
+  if (kot.reprint) lines.push(`${EMPH_ON}* REPRINT *${EMPH_OFF}`);
+  lines.push(
+    ALIGN_LEFT,
+    `${EMPH_ON}Table: ${tableLabel(kot)}${EMPH_OFF}`,
+    '-'.repeat(lineWidth),
+    `Time : ${ticketTime(kot.created_at)}`
+  );
+  if (kot.created_by) lines.push(`By   : ${kot.created_by}`);
+  lines.push('-'.repeat(lineWidth));
+
+  for (const item of items) {
+    const qty = Number(item.quantity) || 0;
+    const nameLines = wrap(String(item.name ?? '').toUpperCase());
+    lines.push(`${EMPH_ON}${String(qty).padStart(2, ' ')} x ${nameLines[0]}${EMPH_OFF}`);
+    for (const extra of nameLines.slice(1)) lines.push(`       ${extra}`);
+  }
+
+  lines.push('-'.repeat(lineWidth));
+  if (kot.note) {
+    lines.push(...wrap(`Note: ${kot.note}`));
+    lines.push('-'.repeat(lineWidth));
+  }
+  lines.push(center(`Order #${kot.order_id ?? ''}`));
+  return lines.join('\n');
+}
+
+// Cancellation chit for a quantity taken back off an already-fired KOT line.
+function buildKotCancel(cancellation = {}) {
+  const cancelled = Number(cancellation.cancelled_quantity) || 0;
+  const remaining = Number(cancellation.remaining_quantity) || 0;
+  const lines = [
+    ALIGN_CENTER,
+    `${DOUBLE_ON}* CANCEL *${DOUBLE_OFF}`,
+    ALIGN_LEFT,
+    `${EMPH_ON}KOT #${cancellation.kot_number ?? '-'}  Table: ${tableLabel(cancellation)}${EMPH_OFF}`,
+    '-'.repeat(lineWidth),
+    `${EMPH_ON}${cancelled} x ${String(cancellation.name ?? '').toUpperCase()}${EMPH_OFF}`,
+    `Remaining on ticket: ${remaining}`
+  ];
+  if (cancellation.reason) lines.push(...wrap(`Reason: ${cancellation.reason}`));
+  lines.push('-'.repeat(lineWidth), `Time : ${ticketTime(cancellation.created_at)}`);
+  if (cancellation.created_by) lines.push(`By   : ${cancellation.created_by}`);
+  lines.push(center(`Order #${cancellation.order_id ?? ''}`));
+  return lines.join('\n');
+}
+
 function closePort(port) {
   return new Promise((resolve, reject) => {
     if (!port.isOpen) return resolve();
@@ -189,4 +265,33 @@ function queueBillPrint(mergedOrders, orderDetails, connection) {
   return job;
 }
 
-module.exports = { queueReceiptPrint, queueBillPrint, defaultPortPath, defaultBaudRate };
+function sendKot(kot, connection) {
+  return sendText(buildKot(kot), connection);
+}
+
+function sendKotCancel(cancellation, connection) {
+  return sendText(buildKotCancel(cancellation), connection);
+}
+
+function queueKotPrint(kot, connection) {
+  const job = printQueue.then(() => sendKot(kot, connection));
+  printQueue = job.catch(() => undefined);
+  return job;
+}
+
+function queueKotCancelPrint(cancellation, connection) {
+  const job = printQueue.then(() => sendKotCancel(cancellation, connection));
+  printQueue = job.catch(() => undefined);
+  return job;
+}
+
+module.exports = {
+  queueReceiptPrint,
+  queueBillPrint,
+  queueKotPrint,
+  queueKotCancelPrint,
+  buildKot,
+  buildKotCancel,
+  defaultPortPath,
+  defaultBaudRate
+};
