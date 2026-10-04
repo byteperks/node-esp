@@ -66,6 +66,16 @@ function renderReceipt(mergedOrders = [], orderDetails = {}) {
     <td class="amount">Paid</td>
   </tr>` : '';
 
+  const company = orderDetails.company ?? {};
+  const companyName = escapeHtml(company.name);
+  const companyLines = [company.branch, company.phone, company.email, company.website]
+    .filter(Boolean).map((line) => `<p>${escapeHtml(line)}</p>`).join('');
+  const taxIds = [
+    company.pan_no ? `Pan No: ${escapeHtml(company.pan_no)}` : '',
+    company.vat_no ? `VAT No: ${escapeHtml(company.vat_no)}` : '',
+  ].filter(Boolean).map((line) => `<h2>${line}</h2>`).join('');
+  const logo = company.logo ? `<img class="logo" src="${escapeHtml(company.logo)}" alt="${companyName} logo">` : '';
+
   const discount = Number(orderDetails.discount?.percent) > 0 ? `<div class="total-row">
     <strong>Discount</strong>
     <strong>-${money(orderDetails.discount.percent)}% [${money(orderDetails.discount.amount)}/-]</strong>
@@ -96,10 +106,10 @@ function renderReceipt(mergedOrders = [], orderDetails = {}) {
 </head>
 <body>
   <div class="header">
-    <div><h1>Tuishi's Cafe</h1><p>Sunakothi, Lalitpur</p><p>+977 974-4375508</p></div>
-    <img class="logo" src="https://cdn.byteperks.com/tuishi/face-logo-svg.png" alt="Tuishi's Cafe logo">
+    <div><h1>${companyName}</h1>${companyLines}</div>
+    ${logo}
   </div>
-  <h2>Pan No: 620538266</h2>
+  ${taxIds}
   <div class="meta"><div><strong>Bill no:</strong> ${escapeHtml(orderDetails.order_id)}</div><div><strong>Date:</strong> ${escapeHtml(orderDetails.nepaliDate ?? nepaliDate(orderDetails.created_at))}</div></div>
   <h2>Order Details</h2>
   <table><thead><tr><th>Item</th><th>Qty</th><th class="amount">Rate</th><th class="amount">Total</th></tr></thead><tbody>${orderRows}</tbody></table>

@@ -34,4 +34,16 @@ if (require.main === module) {
   findMptII();
 }
 
-module.exports = { findMptII };
+// Every serial port the OS reports, in a shape the dashboard can show in a picker.
+async function listDevices() {
+  const ports = await SerialPort.list();
+  return ports.map(p => ({
+    path: p.path,
+    manufacturer: p.manufacturer || '',
+    friendlyName: p.friendlyName || '',
+    pnpId: p.pnpId || '',
+    isMpt: Boolean(p.pnpId?.includes('047F0E101390'))
+  }));
+}
+
+module.exports = { findMptII, listDevices };

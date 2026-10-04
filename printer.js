@@ -59,16 +59,23 @@ function totalLine(label, value) {
   return `${left}${' '.repeat(Math.max(1, lineWidth - left.length - right.length))}${right}`;
 }
 
+function companyHeader(company = {}) {
+  const lines = [];
+  if (company.name) lines.push(center(String(company.name).toUpperCase()));
+  if (company.branch) lines.push(center(company.branch));
+  if (company.phone) lines.push(center(company.phone));
+  if (company.pan_no) lines.push(center(`Pan No: ${company.pan_no}`));
+  if (company.vat_no) lines.push(center(`VAT No: ${company.vat_no}`));
+  return lines;
+}
+
 function buildReceipt(mergedOrders, orderDetails) {
   const items = Array.isArray(mergedOrders) ? mergedOrders : [];
   const customers = Array.isArray(orderDetails.customer) ? orderDetails.customer : [];
   const total = Number(orderDetails.finalTotal) || 0;
   const tendered = Number(orderDetails.tenderAmount) || 0;
   const lines = [
-    center("TUISHI'S CAFE"),
-    center('Sunakothi, Lalitpur'),
-    center('+977 974-4375508'),
-    center('Pan No: 620538266'),
+    ...companyHeader(orderDetails.company),
     '-'.repeat(lineWidth),
     `Bill no: ${orderDetails.order_id ?? ''}`,
     `Date: ${orderDetails.nepaliDate ?? orderDetails.created_at ?? ''}`,
@@ -110,10 +117,7 @@ function buildBill(mergedOrders, orderDetails) {
   const items = Array.isArray(mergedOrders) ? mergedOrders : [];
   const total = Number(orderDetails.finalTotal) || 0;
   const lines = [
-    center("TUISHI'S CAFE"),
-    center('Sunakothi, Lalitpur'),
-    center('+977 974-4375508'),
-    center('Pan No: 620538266'),
+    ...companyHeader(orderDetails.company),
     '-'.repeat(lineWidth),
     `Bill no: ${orderDetails.order_id ?? ''}`,
     `Date: ${orderDetails.nepaliDate ?? orderDetails.created_at ?? ''}`,
@@ -166,7 +170,7 @@ function buildKot(kot = {}) {
   const items = Array.isArray(kot.items) ? kot.items : [];
   const lines = [
     ALIGN_CENTER,
-    `${DOUBLE_ON}KOT #${kot.kot_number ?? '-'}${DOUBLE_OFF}`
+    `${DOUBLE_ON}KOT #${kot.kot_id ?? kot.kot_number ?? '-'}${DOUBLE_OFF}`
   ];
   if (kot.reprint) lines.push(`${EMPH_ON}* REPRINT *${EMPH_OFF}`);
   lines.push(
@@ -181,8 +185,10 @@ function buildKot(kot = {}) {
   for (const item of items) {
     const qty = Number(item.quantity) || 0;
     const nameLines = wrap(String(item.name ?? '').toUpperCase());
-    lines.push(`${EMPH_ON}${String(qty).padStart(2, ' ')} x ${nameLines[0]}${EMPH_OFF}`);
-    for (const extra of nameLines.slice(1)) lines.push(`       ${extra}`);
+    // [line id] lets staff tell two identical items from different KOTs apart
+    const tag = item.id != null ? `[${item.id}] ` : '';
+    lines.push(`${EMPH_ON}${tag}${qty} x ${nameLines[0]}${EMPH_OFF}`);
+    for (const extra of nameLines.slice(1)) lines.push(`    ${extra}`);
   }
 
   lines.push('-'.repeat(lineWidth));
@@ -202,9 +208,9 @@ function buildKotCancel(cancellation = {}) {
     ALIGN_CENTER,
     `${DOUBLE_ON}* CANCEL *${DOUBLE_OFF}`,
     ALIGN_LEFT,
-    `${EMPH_ON}KOT #${cancellation.kot_number ?? '-'}  Table: ${tableLabel(cancellation)}${EMPH_OFF}`,
+    `${EMPH_ON}KOT #${cancellation.kot_id ?? cancellation.kot_number ?? '-'}  Table: ${tableLabel(cancellation)}${EMPH_OFF}`,
     '-'.repeat(lineWidth),
-    `${EMPH_ON}${cancelled} x ${String(cancellation.name ?? '').toUpperCase()}${EMPH_OFF}`,
+    `${EMPH_ON}${cancellation.order_breakdown_id != null ? `[${cancellation.order_breakdown_id}] ` : ''}${cancelled} x ${String(cancellation.name ?? '').toUpperCase()}${EMPH_OFF}`,
     `Remaining on ticket: ${remaining}`
   ];
   if (cancellation.reason) lines.push(...wrap(`Reason: ${cancellation.reason}`));
@@ -285,11 +291,19 @@ function queueKotCancelPrint(cancellation, connection) {
   return job;
 }
 
+function queueTestPrint(connection) {
+  const text = [center('POS PRINTER TEST'), '-'.repeat(lineWidth), `Time: ${ticketTime()}`, 'Printer is working.'].join('\n');
+  const job = printQueue.then(() => sendText(text, connection));
+  printQueue = job.catch(() => undefined);
+  return job;
+}
+
 module.exports = {
   queueReceiptPrint,
   queueBillPrint,
   queueKotPrint,
   queueKotCancelPrint,
+  queueTestPrint,
   buildKot,
   buildKotCancel,
   defaultPortPath,
