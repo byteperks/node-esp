@@ -11,7 +11,7 @@ const {
 const { findMptII, listDevices } = require('./ports');
 
 const app = express();
-const port = Number(process.env.PORT) || 1234;
+const port = Number(process.env.PORT) || 17865;
 const host = process.env.HOST || '127.0.0.1';
 
 async function resolvePortPath() {
